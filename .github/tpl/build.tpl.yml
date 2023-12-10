@@ -1,0 +1,62 @@
+name: "Build"
+on:
+  push:
+    branches:
+      - '*'
+    paths:
+      - '*.sh'
+      - '.github/workflows/build.yml'
+      - '*.txt'
+      - 'conf/*'
+      - 'hooks/*'
+  pull_request:
+    branches:
+      - '*'
+    paths:
+      - '*.sh'
+      - '.github/workflows/build.yml'
+      - '*.txt'
+      - 'conf/*'
+      - 'hooks/*'
+  workflow_dispatch:
+
+  release:
+    types: [ created ]
+
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [{{ALL_RELEASES}}]
+    runs-on: ubuntu-22.04
+    env:
+      SEC_VBOX : ${{ secrets.SEC_VBOX }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Creating Web console
+      uses: vmactions/cf-tunnel@v0
+      id: tunnel
+      with:
+        protocol: http
+        port: 8000
+    - run: |
+        bash build.sh conf/{{VM_OS_NAME}}-${{ matrix.os }}.conf
+    - name: Upload Release Asset
+      if: "contains(github.ref, 'refs/tags/')"
+      id: upload-release-asset
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: |
+          {{VM_OS_NAME}}-${{ matrix.os }}.qcow2.xz
+          {{VM_OS_NAME}}-${{ matrix.os }}-id_rsa.pub
+          {{VM_OS_NAME}}-${{ matrix.os }}-host.id_rsa
+
+
