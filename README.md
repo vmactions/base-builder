@@ -20,6 +20,6 @@ How to use:
 
     Just clone the repo. and run:
     ```bash
-    bash build.sh conf/.conf
+    bash build.sh conf/conf/example.conf.conf
     ```
    
