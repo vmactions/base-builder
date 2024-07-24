@@ -34,10 +34,16 @@ jobs:
     strategy:
       matrix:
         os: [{{ALL_RELEASES}}]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     env:
       SEC_VBOX : ${{ secrets.SEC_VBOX }}
     steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tool-cache: false
     - uses: actions/checkout@v4
     - name: Creating Web console
       uses: vmactions/cf-tunnel@v0
@@ -50,12 +56,12 @@ jobs:
     - name: Upload Release Asset
       if: "contains(github.ref, 'refs/tags/')"
       id: upload-release-asset
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: |
-          {{VM_OS_NAME}}-${{ matrix.os }}.qcow2.xz
+          {{VM_OS_NAME}}-${{ matrix.os }}.qcow2.xz*
           {{VM_OS_NAME}}-${{ matrix.os }}-id_rsa.pub
           {{VM_OS_NAME}}-${{ matrix.os }}-host.id_rsa
 

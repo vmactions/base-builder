@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -ex
 
 
 _conf="$1"
@@ -120,22 +120,49 @@ else
   exit 1
 fi
 
-$vmsh startVM $osname
 
-sleep 2
+echo "VM image size immediately after install:"
+ls -lh ${osname}.qcow2
 
+
+start_and_wait() {
+  $vmsh startVM $osname
+  sleep 2
+  if [ -e "hooks/waitForLoginTag.sh" ]; then
+    echo "hooks/waitForLoginTag.sh"
+    cat "hooks/waitForLoginTag.sh"
+    . "hooks/waitForLoginTag.sh"
+  else
+    waitForText "$VM_LOGIN_TAG"
+  fi
+
+  sleep 3
+}
+
+shutdown_and_wait() {
+  ssh $osname  "$VM_SHUTDOWN_CMD"
+
+  sleep 30
+
+  if $vmsh isRunning $osname; then
+    if ! $vmsh shutdownVM $osname; then
+      echo "shutdown error"
+    fi
+  fi
+
+  while $vmsh isRunning $osname; do
+    sleep 5
+  done
+}
+
+restart_and_wait() {
+  shutdown_and_wait
+  start_and_wait
+}
 
 ###############################################
 
-if [ -e "hooks/waitForLoginTag.sh" ]; then
-  echo "hooks/waitForLoginTag.sh"
-  cat "hooks/waitForLoginTag.sh"
-  . "hooks/waitForLoginTag.sh"
-else
-  waitForText "$VM_LOGIN_TAG"
-fi
-
-sleep 3
+start_and_wait
 
 inputKeys "string root; enter; sleep 1;"
 if [ "$VM_ROOT_PASSWORD" ]; then
@@ -188,21 +215,7 @@ EOF
 ###############################################################
 
 
-if [ -e "hooks/postBuild.sh" ]; then
-  echo "hooks/postBuild.sh"
-  cat "hooks/postBuild.sh"
-  ssh $osname sh<"hooks/postBuild.sh"
-fi
-
-
 ssh $osname 'cat ~/.ssh/id_rsa.pub' >$osname-$VM_RELEASE-id_rsa.pub
-
-
-if [ "$VM_PRE_INSTALL_PKGS" ]; then
-  echo "$VM_INSTALL_CMD $VM_PRE_INSTALL_PKGS"
-  ssh $osname sh <<<"$VM_INSTALL_CMD $VM_PRE_INSTALL_PKGS"
-fi
-
 
 #upload reboot.sh
 if [ -e "hooks/reboot.sh" ]; then
@@ -220,7 +233,6 @@ END
 EOF
 fi
 
-
 #set cronjob
 ssh "$osname" sh <<EOF
 chmod +x /reboot.sh
@@ -235,37 +247,72 @@ crontab -l
 EOF
 
 
-ssh $osname  "$VM_SHUTDOWN_CMD"
+if [ -e "hooks/sysUpdate.sh" ]; then
+  echo "hooks/sysUpdate.sh"
+  cat "hooks/sysUpdate.sh"
+  ssh $osname sh<"hooks/sysUpdate.sh"
 
-sleep 30
-
-###############################################################
-
-if $vmsh isRunning $osname; then
-  if ! $vmsh shutdownVM $osname; then
-    echo "shutdown error"
-  fi
+  # We need to reboot after system updates
+  restart_and_wait
 fi
 
-while $vmsh isRunning $osname; do
-  sleep 5
-done
+
+if [ -e "hooks/postBuild.sh" ]; then
+  echo "hooks/postBuild.sh"
+  cat "hooks/postBuild.sh"
+  ssh $osname sh<"hooks/postBuild.sh"
+fi
+
+
+# Install any requested packages
+if [ "$VM_PRE_INSTALL_PKGS" ]; then
+  echo "$VM_INSTALL_CMD $VM_PRE_INSTALL_PKGS"
+  ssh $osname sh <<<"$VM_INSTALL_CMD $VM_PRE_INSTALL_PKGS"
+fi
+
+# Done!
+shutdown_and_wait
 
 
 ##############################################################
 
+if [ "$VM_ISO_LINK" ]; then
+  echo "Clean up ISO for more space"
+  sudo rm -f ${osname}.iso
+fi
 
+echo "contents of home directory:"
+ls -lah
 
+echo "free space:"
+df -h
 
-ova="$osname-$VM_RELEASE.qcow2"
+ova="$osname-$VM_RELEASE.qcow2.xz"
+# The exportOVA command doesn't try to compact the qcow2 file and also uses
+# a lesser compression.
+#$vmsh exportOVA $osname "$ova"
 
+# compact the qcow2 file by exporting it
+echo "Compacting ${osname}.qcow2, this will take a long time..."
+sudo qemu-img convert -O qcow2 ${osname}.qcow2 ${osname}.qcow2.compact
+sudo rm -f ${osname}.qcow2
+sudo mv ${osname}.qcow2.compact ${osname}.qcow2
+ls -lh ${osname}.qcow2
 
-echo "Exporting $ova"
-$vmsh exportOVA $osname "$ova"
+# Compress
+echo "Compressing $ova, this will take a long time..."
+sudo xz -z9 --stdout ${osname}.qcow2 > $ova
+
+ova_size=`du -k ${ova} | cut -f 1`
+if [ ${ova_size} -gt 2097152 ] ; then
+  echo "OVA exceeds 2G, splitting in 2G chunks..."
+  split -b 2G -d -a 1 "${ova}" "${ova}."
+  rm -f "${ova}"
+fi
 
 cp ~/.ssh/id_rsa  $osname-$VM_RELEASE-host.id_rsa
 
-
+echo "contents after export:"
 ls -lah
 
 
