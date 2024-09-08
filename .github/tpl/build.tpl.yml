@@ -34,7 +34,7 @@ jobs:
     strategy:
       matrix:
         os: [{{ALL_RELEASES}}]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       SEC_VBOX : ${{ secrets.SEC_VBOX }}
     steps:
