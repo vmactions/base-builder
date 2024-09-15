@@ -61,7 +61,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: |
-          {{VM_OS_NAME}}-${{ matrix.os }}.qcow2.xz*
+          {{VM_OS_NAME}}-${{ matrix.os }}.qcow2*
           {{VM_OS_NAME}}-${{ matrix.os }}-id_rsa.pub
           {{VM_OS_NAME}}-${{ matrix.os }}-host.id_rsa
 
