@@ -227,7 +227,7 @@ if [ "$VM_USE_SSHROOT_BUILD_SSH" ]; then
   vmip=$($vmsh getVMIP $osname)
   sshpass -p "$VM_ROOT_PASSWORD" ssh -o StrictHostKeyChecking=no -tt  root@$vmip TERM=xterm sh <enablessh.local
   echo "check ssh access:"
-  ssh root@$vmip pwd
+  ssh -vv root@$vmip pwd
   echo "ssh OK"
 else
   inputKeys "string root; enter; sleep 1;"
