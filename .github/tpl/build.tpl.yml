@@ -37,7 +37,7 @@ jobs:
         os: [{{ALL_RELEASES}}]
     runs-on: ubuntu-24.04
     env:
-      SEC_VBOX : ${{ env.SEC_VBOX }}
+      SEC_VBOX : ${{ vars.SEC_VBOX }}
     steps:
 #    - name: Free Disk Space (Ubuntu)
 #      uses: jlumbroso/free-disk-space@main
